@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../../notifiers/auth_notifier.dart';
 import '../../../notifiers/blog_notifier.dart';
 
@@ -14,6 +17,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  List<Uint8List> _imageBytes = [];
+  List<String> _imageNames = [];
 
   @override
   void dispose() {
@@ -37,6 +42,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         authorId: authNotifier.currentUser!.id,
         title: _titleController.text,
         content: _contentController.text,
+        imageBytes: _imageBytes,
+        fileNames: _imageNames,
       );
 
       if (mounted) {
@@ -94,6 +101,77 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     return null;
                   },
                 ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final result = await FilePicker.platform.pickFiles(
+                        allowMultiple: true,
+                        type: FileType.image,
+                        withData: true,
+                      );
+                      if (result != null) {
+                        setState(() {
+                          for (final f in result.files) {
+                            if (f.bytes != null) {
+                              _imageBytes.add(f.bytes!);
+                              _imageNames.add(f.name);
+                            }
+                          }
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.image),
+                    label: const Text('Add images'),
+                  ),
+                ),
+                if (_imageBytes.isNotEmpty)
+                  SizedBox(
+                    height: 100,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _imageBytes.length,
+                      itemBuilder: (context, index) {
+                        return Stack(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Image.memory(
+                                _imageBytes[index],
+                                width: 120,
+                                height: 100,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              right: 4,
+                              top: 4,
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _imageBytes.removeAt(index);
+                                    _imageNames.removeAt(index);
+                                  });
+                                },
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
                 const SizedBox(height: 24),
                 Consumer<BlogNotifier>(
                   builder: (context, blogNotifier, _) {

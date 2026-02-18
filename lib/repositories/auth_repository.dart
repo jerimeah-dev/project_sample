@@ -1,11 +1,15 @@
+import 'dart:typed_data';
+
 import 'package:uuid/uuid.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
+import '../services/storage_service.dart';
 
 class AuthRepository {
   final AuthService authService;
+  final StorageService? storageService;
 
-  AuthRepository(this.authService);
+  AuthRepository(this.authService, [this.storageService]);
 
   Future<UserModel> register({
     required String email,
@@ -85,5 +89,26 @@ class AuthRepository {
       bio: bio,
       avatarUrl: avatarUrl,
     );
+  }
+
+  /// Uploads avatar binary (if storageService available) and updates profile.
+  Future<String?> uploadAvatarAndUpdateProfile({
+    required String userId,
+    required Uint8List fileBytes,
+    required String fileName,
+  }) async {
+    if (storageService == null) {
+      throw Exception('StorageService not available');
+    }
+
+    final publicUrl = await storageService!.uploadAvatarImage(
+      userId,
+      fileBytes,
+      fileName,
+    );
+
+    await authService.updateProfile(userId: userId, avatarUrl: publicUrl);
+
+    return publicUrl;
   }
 }

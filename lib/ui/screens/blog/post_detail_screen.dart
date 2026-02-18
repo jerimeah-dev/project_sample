@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../notifiers/auth_notifier.dart';
 import '../../../notifiers/blog_notifier.dart';
 import '../../../ui/common/widgets/app_image.dart';
+import 'package:file_picker/file_picker.dart';
+import 'edit_post_screen.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final String postId;
@@ -16,6 +19,8 @@ class PostDetailScreen extends StatefulWidget {
 
 class _PostDetailScreenState extends State<PostDetailScreen> {
   final _commentController = TextEditingController();
+  List<Uint8List> _commentImageBytes = [];
+  List<String> _commentImageNames = [];
 
   @override
   void initState() {
@@ -46,6 +51,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
         postId: widget.postId,
         authorId: authNotifier.currentUser!.id,
         content: _commentController.text,
+        imageBytes: _commentImageBytes.isNotEmpty ? _commentImageBytes : null,
+        fileNames: _commentImageNames.isNotEmpty ? _commentImageNames : null,
       );
 
       _commentController.clear();
@@ -104,12 +111,14 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   PopupMenuItem(
                     child: const Text('Edit'),
                     onTap: () {
-                      // TODO: Implement edit functionality
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Edit not implemented yet'),
-                        ),
-                      );
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                EditPostScreen(post: blogNotifier.currentPost!),
+                          ),
+                        );
+                      });
                     },
                   ),
                   PopupMenuItem(
@@ -271,11 +280,76 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           ),
                           const SizedBox(width: 8),
                           IconButton(
+                            onPressed: () async {
+                              final result = await FilePicker.platform
+                                  .pickFiles(
+                                    allowMultiple: true,
+                                    type: FileType.image,
+                                    withData: true,
+                                  );
+                              if (result != null) {
+                                setState(() {
+                                  for (final f in result.files) {
+                                    if (f.bytes != null) {
+                                      _commentImageBytes.add(f.bytes!);
+                                      _commentImageNames.add(f.name);
+                                    }
+                                  }
+                                });
+                              }
+                            },
+                            icon: const Icon(Icons.image),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
                             onPressed: _handleAddComment,
                             icon: const Icon(Icons.send),
                           ),
                         ],
                       ),
+                      if (_commentImageBytes.isNotEmpty)
+                        SizedBox(
+                          height: 80,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _commentImageBytes.length,
+                            itemBuilder: (context, i) {
+                              return Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Stack(
+                                  children: [
+                                    Image.memory(
+                                      _commentImageBytes[i],
+                                      width: 100,
+                                      height: 80,
+                                      fit: BoxFit.cover,
+                                    ),
+                                    Positioned(
+                                      right: 0,
+                                      top: 0,
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            _commentImageBytes.removeAt(i);
+                                            _commentImageNames.removeAt(i);
+                                          });
+                                        },
+                                        child: Container(
+                                          color: Colors.black54,
+                                          child: const Icon(
+                                            Icons.close,
+                                            color: Colors.white,
+                                            size: 16,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
                       const SizedBox(height: 16),
                       // Comments list
                       if (blogNotifier.isLoadingComments)

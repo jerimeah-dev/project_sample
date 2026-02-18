@@ -7,24 +7,50 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:project_sample/main.dart';
+import 'package:project_sample/ui/screens/auth/login_screen.dart';
+import 'package:project_sample/services/auth_service.dart';
+import 'package:project_sample/services/blog_service.dart';
+import 'package:project_sample/services/storage_service.dart';
+import 'package:project_sample/repositories/auth_repository.dart';
+import 'package:project_sample/repositories/blog_repository.dart';
+import 'package:project_sample/notifiers/auth_notifier.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
+  testWidgets('App builds and shows LoginScreen', (WidgetTester tester) async {
+    // Initialize Supabase with a dummy client for tests.
+    await Supabase.initialize(
+      url: 'http://127.0.0.1',
+      anonKey: 'test-anon-key',
+    );
+
     // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+    final supabaseClient = Supabase.instance.client;
+    final authService = AuthService(supabaseClient);
+    final blogService = BlogService(supabaseClient);
+    final storageService = StorageService(supabaseClient);
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    final authRepo = AuthRepository(authService, storageService);
+    final blogRepo = BlogRepository(blogService);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    final authNotifier = AuthNotifier(authRepo);
+    await authNotifier.initialize();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    await tester.pumpWidget(
+      MyApp.withDependencies(
+        authService: authService,
+        blogService: blogService,
+        storageService: storageService,
+        authRepository: authRepo,
+        blogRepository: blogRepo,
+        authNotifier: authNotifier,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify that the LoginScreen is shown by default.
+    expect(find.byType(LoginScreen), findsOneWidget);
   });
 }

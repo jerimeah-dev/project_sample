@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/user_model.dart';
 import '../repositories/auth_repository.dart';
 
@@ -11,6 +10,13 @@ class AuthNotifier extends ChangeNotifier {
   String? _error;
 
   AuthNotifier(this._authRepository);
+
+  /// Initialize by checking Supabase session and loading the user if present.
+  Future<void> initialize() async {
+    // Initialization step left intentionally minimal: session handling
+    // is managed by the repository layer (custom auth). If you have
+    // a cached user id, call `loadUser(cachedId)` here.
+  }
 
   // Getters
   UserModel? get currentUser => _currentUser;
@@ -56,10 +62,7 @@ class AuthNotifier extends ChangeNotifier {
       _currentUser = user;
 
       // Save session locally (basic implementation)
-      final prefs = Supabase.instance.client.auth.currentUser;
-      if (prefs != null) {
-        // Session saved
-      }
+      // Session persistence is handled by repository / app storage.
     } catch (e) {
       _error = e.toString();
       rethrow;
@@ -116,6 +119,8 @@ class AuthNotifier extends ChangeNotifier {
     String? displayName,
     String? bio,
     String? avatarUrl,
+    Uint8List? avatarBytes,
+    String? avatarFileName,
   }) async {
     if (_currentUser == null) throw Exception('No user logged in');
 
@@ -124,18 +129,29 @@ class AuthNotifier extends ChangeNotifier {
     notifyListeners();
 
     try {
+      String? newAvatarUrl = avatarUrl;
+
+      if (avatarBytes != null && avatarFileName != null) {
+        newAvatarUrl = await _authRepository.uploadAvatarAndUpdateProfile(
+          userId: _currentUser!.id,
+          fileBytes: avatarBytes,
+          fileName: avatarFileName,
+        );
+      }
+
+      // If avatar wasn't uploaded, update profile fields normally
       await _authRepository.updateProfile(
         userId: _currentUser!.id,
         displayName: displayName,
         bio: bio,
-        avatarUrl: avatarUrl,
+        avatarUrl: newAvatarUrl,
       );
 
       // Update current user
       _currentUser = _currentUser!.copyWith(
         displayName: displayName ?? _currentUser!.displayName,
         bio: bio ?? _currentUser!.bio,
-        avatarUrl: avatarUrl ?? _currentUser!.avatarUrl,
+        avatarUrl: newAvatarUrl ?? _currentUser!.avatarUrl,
       );
     } catch (e) {
       _error = e.toString();

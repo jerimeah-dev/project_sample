@@ -331,6 +331,12 @@ lib/
 
 ---
 
+# Routing
+
+Use Go_Router, handle auth gate/guard
+
+---
+
 # 🗄 DATABASE STRUCTURE
 
 ## users_jeremiah
@@ -525,5 +531,6 @@ Posts/comments MUST always include:
 
 No Supabase Auth.
 Ever.
+On app start --> check or wait if logged in or till logged in --> load data --> show home
 
 Keep boundaries strict.

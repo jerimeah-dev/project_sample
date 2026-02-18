@@ -64,14 +64,18 @@ class BlogNotifier extends ChangeNotifier {
     required String authorId,
     required String title,
     required String content,
+    List<Uint8List>? imageBytes,
+    List<String>? fileNames,
   }) async {
     _error = null;
 
     try {
-      final newPost = await _blogRepository.createPost(
+      final newPost = await _blogRepository.createPostWithImages(
         authorId: authorId,
         title: title,
         content: content,
+        imageBytes: imageBytes,
+        fileNames: fileNames,
       );
 
       _posts.insert(0, newPost);
@@ -86,14 +90,22 @@ class BlogNotifier extends ChangeNotifier {
     required String postId,
     required String title,
     required String content,
+    List<String>? deleteImageIds,
+    List<String>? deleteImageUrls,
+    List<Uint8List>? addImageBytes,
+    List<String>? addFileNames,
   }) async {
     _error = null;
 
     try {
-      final updatedPost = await _blogRepository.updatePost(
+      final updatedPost = await _blogRepository.updatePostWithImageChanges(
         postId: postId,
         title: title,
         content: content,
+        deleteImageIds: deleteImageIds,
+        deleteImageUrls: deleteImageUrls,
+        addImageBytes: addImageBytes,
+        addFileNames: addFileNames,
       );
 
       final index = _posts.indexWhere((p) => p.id == postId);
@@ -149,14 +161,18 @@ class BlogNotifier extends ChangeNotifier {
     required String postId,
     required String authorId,
     required String content,
+    List<Uint8List>? imageBytes,
+    List<String>? fileNames,
   }) async {
     _error = null;
 
     try {
-      final newComment = await _blogRepository.createComment(
+      final newComment = await _blogRepository.createCommentWithImages(
         postId: postId,
         authorId: authorId,
         content: content,
+        imageBytes: imageBytes,
+        fileNames: fileNames,
       );
 
       _currentPostComments.add(newComment);
@@ -170,14 +186,23 @@ class BlogNotifier extends ChangeNotifier {
   Future<void> updateComment({
     required String commentId,
     required String content,
+    List<String>? deleteImageIds,
+    List<String>? deleteImageUrls,
+    List<Uint8List>? addImageBytes,
+    List<String>? addFileNames,
   }) async {
     _error = null;
 
     try {
-      final updatedComment = await _blogRepository.updateComment(
-        commentId: commentId,
-        content: content,
-      );
+      final updatedComment = await _blogRepository
+          .updateCommentWithImageChanges(
+            commentId: commentId,
+            content: content,
+            deleteImageIds: deleteImageIds,
+            deleteImageUrls: deleteImageUrls,
+            addImageBytes: addImageBytes,
+            addFileNames: addFileNames,
+          );
 
       final index = _currentPostComments.indexWhere((c) => c.id == commentId);
       if (index != -1) {

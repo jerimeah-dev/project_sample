@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
+import 'services/storage_service.dart';
+import 'ui/screens/profile/profile_screen.dart';
+import 'ui/screens/splash_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'services/auth_service.dart';
 import 'services/blog_service.dart';
@@ -22,55 +26,117 @@ void main() async {
 
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
 
-  runApp(const MyApp());
+  final supabaseClient = Supabase.instance.client;
+
+  // Pre-create services and repositories
+  final authService = AuthService(supabaseClient);
+  final blogService = BlogService(supabaseClient);
+  final storageService = StorageService(supabaseClient);
+
+  final authRepo = AuthRepository(authService, storageService);
+  final blogRepo = BlogRepository(blogService);
+
+  // Create and initialize AuthNotifier before runApp so routing can read state
+  final authNotifier = AuthNotifier(authRepo);
+  await authNotifier.initialize();
+
+  runApp(
+    MyApp.withDependencies(
+      authService: authService,
+      blogService: blogService,
+      storageService: storageService,
+      authRepository: authRepo,
+      blogRepository: blogRepo,
+      authNotifier: authNotifier,
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final AuthService authService;
+  final BlogService blogService;
+  final StorageService storageService;
+  final AuthRepository authRepository;
+  final BlogRepository blogRepository;
+  final AuthNotifier authNotifier;
+
+  const MyApp.withDependencies({
+    required this.authService,
+    required this.blogService,
+    required this.storageService,
+    required this.authRepository,
+    required this.blogRepository,
+    required this.authNotifier,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final supabaseClient = Supabase.instance.client;
+    final _router = GoRouter(
+      initialLocation: '/',
+      refreshListenable: authNotifier,
+      redirect: (context, state) {
+        final loggedIn = authNotifier.isLoggedIn;
+        final atLogin =
+            state.location == '/login' || state.location == '/register';
+
+        if (!loggedIn) {
+          if (!atLogin) return '/login';
+          return null;
+        }
+
+        // logged in
+        if (loggedIn) {
+          if (atLogin || state.location == '/') return '/splash';
+        }
+
+        return null;
+      },
+      routes: [
+        GoRoute(path: '/', builder: (ctx, state) => const SizedBox.shrink()),
+        GoRoute(path: '/splash', builder: (ctx, state) => const SplashScreen()),
+        GoRoute(path: '/login', builder: (ctx, state) => const LoginScreen()),
+        GoRoute(
+          path: '/register',
+          builder: (ctx, state) => const RegisterScreen(),
+        ),
+        GoRoute(path: '/feed', builder: (ctx, state) => const FeedScreen()),
+        GoRoute(
+          path: '/profile',
+          builder: (ctx, state) => const ProfileScreen(),
+        ),
+        GoRoute(path: '/post/:id', builder: (ctx, state) => const FeedScreen()),
+      ],
+    );
 
     return MultiProvider(
       providers: [
         // Services
-        Provider<AuthService>(create: (_) => AuthService(supabaseClient)),
-        Provider<BlogService>(create: (_) => BlogService(supabaseClient)),
-        // Repositories
-        Provider<AuthRepository>(
-          create: (context) => AuthRepository(context.read<AuthService>()),
+        Provider<AuthService>.value(value: authService),
+        Provider<BlogService>.value(value: blogService),
+        Provider<StorageService>.value(value: storageService),
+
+        // Repositories via ProxyProviders so they can react if services change
+        ProxyProvider<AuthService, AuthRepository>(
+          update: (_, authSvc, __) => AuthRepository(authSvc, storageService),
         ),
-        Provider<BlogRepository>(
-          create: (context) => BlogRepository(context.read<BlogService>()),
+        ProxyProvider<BlogService, BlogRepository>(
+          update: (_, blogSvc, __) => BlogRepository(blogSvc),
         ),
+
         // Notifiers
-        ChangeNotifierProvider<AuthNotifier>(
-          create: (context) => AuthNotifier(context.read<AuthRepository>()),
-        ),
+        ChangeNotifierProvider<AuthNotifier>.value(value: authNotifier),
         ChangeNotifierProvider<BlogNotifier>(
-          create: (context) => BlogNotifier(context.read<BlogRepository>()),
+          create: (ctx) => BlogNotifier(ctx.read<BlogRepository>()),
         ),
       ],
-      child: MaterialApp(
+      child: MaterialApp.router(
         title: 'Agents App',
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
           useMaterial3: true,
         ),
-        home: Consumer<AuthNotifier>(
-          builder: (context, authNotifier, _) {
-            if (authNotifier.isLoggedIn) {
-              return const FeedScreen();
-            }
-            return const LoginScreen();
-          },
-        ),
-        routes: {
-          '/login': (context) => const LoginScreen(),
-          '/register': (context) => const RegisterScreen(),
-          '/feed': (context) => const FeedScreen(),
-        },
+        routerConfig: _router,
       ),
     );
   }
